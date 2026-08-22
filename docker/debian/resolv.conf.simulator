@@ -1,0 +1,22 @@
+# docker/debian/resolv.conf.simulator
+#
+# Se monta directamente en /etc/resolv.conf del contenedor del simulador,
+# reemplazando el que generaría Docker Engine (que apunta a 127.0.0.11, su
+# proxy DNS interno).
+#
+# Motivo: en este host el proxy DNS embebido de Docker (127.0.0.11) no
+# responde — confirmado con un contenedor busybox nuevo en la red bridge
+# por defecto, sin nada de este repo de por medio ("connection refused"),
+# así que es un problema de dockerd en este host, no de run-simulation.sh
+# ni de docker-user-firewall.sh. Probablemente relacionado con que un
+# "nft -f ... flush ruleset" en el host se lleva por delante el estado
+# interno de Docker en netfilter y un restart de DOCKER-USER no basta para
+# recuperarlo (haría falta "systemctl restart docker" — fuera del alcance
+# de este simulador, afecta a otros contenedores del host).
+#
+# Yendo directo a DNS público nos saltamos el proxy roto. Nota: la consulta
+# DNS en sí (puerto 53) ya está permitida en la baseline de DOCKER-USER sin
+# necesidad de --allow-egress — lo que sigue necesitando --allow-egress es
+# el tráfico HTTP real de apt-get (puerto 80/443), ver README.
+nameserver 1.1.1.1
+nameserver 8.8.8.8

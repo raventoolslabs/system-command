@@ -1,0 +1,62 @@
+# docker/debian/docker-compose.yml
+#
+# Simulador: Debian 13 con systemd real, solo para testear los scripts de
+# este repo (NO es un patrón de despliegue de servicios — para eso está la
+# convención del skill docker-install en /opt/docker/<servicio>/).
+#
+# El repo se monta de SOLO LECTURA exactamente en /opt/code/system-command,
+# porque los .service de scripts/firewall/ y las rutas relativas de los
+# propios scripts (../../.env) lo asumen. El .env de prueba se monta ENCIMA
+# del .env real del repo, solo dentro del contenedor — Docker resuelve los
+# bind mounts por profundidad de ruta (el padre primero, el hijo después)
+# sin importar el orden en que aparezcan aquí, así que esto nunca toca el
+# .env real del host.
+services:
+  debian:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      network: host  # algunos hosts/sandboxes no dan salida a internet por
+                      # la red bridge de build; con la red del host, "apt-get
+                      # install" en el Dockerfile sí la tiene.
+    # El contenedor YA ARRANCADO se queda en la red bridge normal de Docker
+    # (nunca network_mode: host — eso haría que el nft/iptables de dentro
+    # tocaran de verdad el firewall del host, justo lo que este simulador
+    # evita). Si esa red bridge no tiene salida a internet en tu entorno
+    # (algunos sandboxes la bloquean aunque el host sí tenga), fail2ban,
+    # ClamAV y la sincronización NTP real se quedan en WARNING tras
+    # fix_security.sh — ver limitaciones en README.md.
+    image: system-command-sim:trixie
+    container_name: system-command-sim
+    hostname: system-command-sim
+    privileged: true        # systemd real + nftables/iptables reales
+    cgroup: host             # cgroupns=host, necesario con cgroup v2 en el host
+    stop_signal: SIGRTMIN+3  # apagado limpio (equivalente a systemctl poweroff)
+    tmpfs:
+      - /run
+      - /run/lock
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - ../..:/opt/code/system-command:ro
+      - ./.env.simulator:/opt/code/system-command/.env:ro
+      - ./nftables.conf:/etc/nftables.conf:ro
+      # Monta un resolv.conf fijo (DNS público) en vez de dejar que Docker
+      # genere el suyo (que apunta a 127.0.0.11, su proxy DNS interno). Dos
+      # motivos, ninguno arreglable desde este compose:
+      #  1) el host resuelve vía el MagicDNS de Tailscale (100.100.100.100),
+      #     solo alcanzable por su propia interfaz tailscale0 — un
+      #     contenedor en su netns no tiene esa ruta.
+      #  2) en este host el proxy 127.0.0.11 de Docker no responde en
+      #     absoluto (confirmado con un contenedor busybox nuevo en la red
+      #     bridge por defecto, sin nada de este repo) — parece deuda de un
+      #     "nft -f ... flush ruleset" que se llevó por delante el estado
+      #     interno de Docker en netfilter; un simple restart de
+      #     DOCKER-USER no lo repara, haría falta "systemctl restart
+      #     docker" en el host. Por eso NO basta con el "dns:" de compose
+      #     (ese solo cambia a qué reenvía 127.0.0.11, y 127.0.0.11 mismo
+      #     es el que está roto) — hace falta saltárselo del todo con este
+      #     bind mount directo.
+      - ./resolv.conf.simulator:/etc/resolv.conf:ro
+    environment:
+      - container=docker
+    command: ["/lib/systemd/systemd"]

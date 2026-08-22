@@ -1,0 +1,4 @@
+.env
+docker/**/logs
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

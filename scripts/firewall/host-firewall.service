@@ -1,0 +1,13 @@
+[Unit]
+Description=Allowlist explicita de puertos del host en la cadena input (inet filter)
+After=nftables.service
+Wants=nftables.service
+PartOf=nftables.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/code/system-command/scripts/firewall/host-firewall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

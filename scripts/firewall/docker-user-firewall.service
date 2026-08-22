@@ -1,0 +1,13 @@
+[Unit]
+Description=Allowlist explicita de puertos Docker en DOCKER-USER
+After=docker.service
+Wants=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/code/system-command/scripts/firewall/docker-user-firewall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
