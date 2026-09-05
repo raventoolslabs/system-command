@@ -1,4 +1,4 @@
-# system-command
+# SYS commands
 
 Scripts de administración del host: auditoría de seguridad y recursos,
 firewall (host y Docker) y mantenimiento de paquetes.
