@@ -181,6 +181,7 @@ organizada en **apartados independientes**:
 | `firewall`  | Relanza `host-firewall.sh` y `docker-user-firewall.sh` — arregla el caso típico de un `nft -f /etc/nftables.conf` que vació `DOCKER-USER` |
 | `fail2ban`  | Instala/activa fail2ban |
 | `updates`   | Actualizaciones de paquetes pendientes (delega en `update_packages.sh`) |
+| `autoupdates` | Parches de seguridad automáticos: instala `unattended-upgrades`, lo activa en `/etc/apt/apt.conf.d/20auto-upgrades`, activa los timers `apt-daily`/`apt-daily-upgrade` y lo ejecuta una vez para aplicar lo pendiente. Si otro fichero de `apt.conf.d` lo desactiva a propósito, no lo pisa: lo informa como fallo |
 | `clamav`    | ClamAV: instalación, actualización de firmas (freshclam) y de versión |
 | `ntp`       | Activa NTP y lo apunta al servidor de `NTP_SERVER` (si está definido en `.env`) |
 | `ssh`       | Directivas que nunca pueden bloquear una sesión legítima: `PermitEmptyPasswords`, `MaxAuthTries`, vía `/etc/ssh/sshd_config.d/99-fix-security.conf` (validado con `sshd -t` antes de recargar) |

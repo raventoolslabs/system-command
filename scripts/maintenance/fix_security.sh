@@ -16,18 +16,18 @@
 # actúa si no lo está — se puede ejecutar tantas veces como se quiera.
 #
 # Usage: sudo ./fix_security.sh [--dry-run] [apartado ...]
-#   Apartados disponibles: firewall fail2ban updates clamav ntp ssh perms
+#   Apartados disponibles: firewall fail2ban updates autoupdates clamav ntp ssh perms
 #   Sin apartados: se ejecutan todos.
 set -uo pipefail
 
-ALL_SECTIONS="firewall fail2ban updates clamav ntp ssh perms"
+ALL_SECTIONS="firewall fail2ban updates autoupdates clamav ntp ssh perms"
 
 DRY_RUN=0
 SECTIONS=""
 for arg in "$@"; do
     case "$arg" in
         --dry-run) DRY_RUN=1 ;;
-        firewall|fail2ban|updates|clamav|ntp|ssh|perms) SECTIONS="$SECTIONS $arg" ;;
+        firewall|fail2ban|updates|autoupdates|clamav|ntp|ssh|perms) SECTIONS="$SECTIONS $arg" ;;
         *)
             echo "Opción o apartado desconocido: $arg" >&2
             echo "Apartados válidos: $ALL_SECTIONS" >&2
@@ -154,6 +154,76 @@ if "$SCRIPT_DIR/update_packages.sh" $( [ "$DRY_RUN" -eq 1 ] && echo --dry-run );
     :
 else
     failed "update_packages.sh terminó con errores"
+fi
+}
+
+# =======================================================================
+fix_autoupdates() {
+hr "Parches de seguridad automáticos (unattended-upgrades)"
+# Mismas comprobaciones que security_check.sh, en el mismo orden.
+if dpkg -s unattended-upgrades >/dev/null 2>&1; then
+    ok "unattended-upgrades instalado"
+elif [ "$DRY_RUN" -eq 1 ]; then
+    would "instalar unattended-upgrades"
+else
+    ensure_apt_updated
+    if apt-get install -y unattended-upgrades; then
+        fixed "unattended-upgrades instalado"
+    else
+        failed "no se pudo instalar unattended-upgrades"
+        return
+    fi
+fi
+
+au_enabled() {
+    AU_LISTS="" AU_UPGRADE=""
+    eval "$(apt-config shell AU_LISTS APT::Periodic::Update-Package-Lists AU_UPGRADE APT::Periodic::Unattended-Upgrade 2>/dev/null)"
+    [ "${AU_LISTS:-0}" != "0" ] && [ "${AU_UPGRADE:-0}" != "0" ]
+}
+
+# Mismo fichero que escribe "dpkg-reconfigure unattended-upgrades". Si
+# otro fichero posterior de apt.conf.d lo desactiva, no se pisa: es una
+# decisión explícita de alguien y se informa como fallo.
+AU_CONF=/etc/apt/apt.conf.d/20auto-upgrades
+if au_enabled; then
+    ok "unattended-upgrades activado en apt"
+elif [ "$DRY_RUN" -eq 1 ]; then
+    would "escribir $AU_CONF (Update-Package-Lists y Unattended-Upgrade a 1)"
+else
+    printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > "$AU_CONF"
+    if au_enabled; then
+        fixed "$AU_CONF escrito, unattended-upgrades activado"
+    else
+        failed "escrito $AU_CONF pero otro fichero de /etc/apt/apt.conf.d lo sigue desactivando (busca con: grep -r Periodic /etc/apt/apt.conf.d)"
+    fi
+fi
+
+for t in apt-daily.timer apt-daily-upgrade.timer; do
+    if systemctl is-enabled --quiet "$t" 2>/dev/null && systemctl is-active --quiet "$t" 2>/dev/null; then
+        ok "$t activo"
+    elif [ "$DRY_RUN" -eq 1 ]; then
+        would "activar $t"
+    elif systemctl enable --now "$t" 2>/dev/null; then
+        fixed "$t activado"
+    else
+        failed "no se pudo activar $t"
+    fi
+done
+
+# Una ejecución ahora: aplica ya los parches pendientes y demuestra que
+# funciona en este host, sin esperar al próximo disparo del timer.
+AU_LOG=/var/log/unattended-upgrades/unattended-upgrades.log
+if [ -f "$AU_LOG" ] && [ $(( ( $(date +%s) - $(stat -c %Y "$AU_LOG") ) / 86400 )) -le 3 ]; then
+    ok "unattended-upgrades se ha ejecutado en los últimos 3 días"
+elif [ "$DRY_RUN" -eq 1 ]; then
+    would "ejecutar unattended-upgrade ahora (aplica los parches de seguridad pendientes)"
+else
+    ensure_apt_updated
+    if unattended-upgrade; then
+        fixed "unattended-upgrade ejecutado (detalle en $AU_LOG)"
+    else
+        failed "unattended-upgrade terminó con errores (revisa $AU_LOG)"
+    fi
 fi
 }
 
