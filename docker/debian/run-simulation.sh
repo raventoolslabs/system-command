@@ -134,7 +134,7 @@ else
 fi
 
 egress_open
-dcex env SUDO_USER=testuser "$FIX_SEC" fail2ban updates clamav ntp ssh perms \
+dcex env SUDO_USER=testuser "$FIX_SEC" fail2ban updates autoupdates clamav ntp ssh perms \
     > "$LOGDIR/03b-fix_security-rest.log" 2>&1 || true
 cat "$LOGDIR/03b-fix_security-rest.log"
 
@@ -146,7 +146,7 @@ dcex "$FIX_SEC" firewall > "$LOGDIR/04-fix_security-firewall-retry.log" 2>&1
 cat "$LOGDIR/04-fix_security-firewall-retry.log"
 DOCKER_USER_AFTER=$(dcex iptables -S DOCKER-USER)
 echo "$DOCKER_USER_AFTER"
-if echo "$DOCKER_USER_AFTER" | grep -q -- '-A DOCKER-USER -j DROP'; then
+if echo "$DOCKER_USER_AFTER" | grep -qE -- '-A DOCKER-USER( -i [^ ]+)? -j DROP'; then
     DOCKERUSER_FIXED=1
 else
     DOCKERUSER_FIXED=0
