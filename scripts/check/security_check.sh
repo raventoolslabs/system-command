@@ -22,7 +22,7 @@ if [ -f "$ENV_FILE" ]; then
     NTP_SERVER=$(grep -E '^NTP_SERVER=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
     DOCKER_WAN_IFACES=$(grep -E '^DOCKER_WAN_IFACES=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
 fi
-EXPECTED_PORTS="${EXPECTED_PORTS:-22 80 443 41641}"
+EXPECTED_PORTS="${EXPECTED_PORTS:-22 80 443}"
 DOCKER_ALLOWED_PORTS="${DOCKER_ALLOWED_PORTS:-}"
 # Interfaces sobre las que docker-user-firewall.sh aplica el allowlist. Si no
 # se declaran, usa la de la ruta por defecto; aqui se replica esa misma regla
@@ -36,7 +36,7 @@ NTP_SERVER="${NTP_SERVER:-}"
 # accesibles. Para no duplicar esa misma lista en EXPECTED_PORTS, el
 # universo de puertos esperados aquí es la unión de las tres variables:
 # EXPECTED_PORTS solo necesita los puertos que NO gestione ya ninguno de
-# los dos scripts de firewall (p.ej. 22 y 41641, fuera de su control).
+# los dos scripts de firewall (p.ej. 22, fuera de su control).
 expand_ports() {
     # $1 = entradas "puerto[:puerto]/tcp|udp" separadas por espacios;
     # imprime un puerto suelto por línea, expandiendo los rangos.
@@ -66,6 +66,7 @@ FIX="sudo ./scripts/maintenance/fix_security.sh"
 HINT_FIREWALL="$FIX firewall"
 HINT_FAIL2BAN="$FIX fail2ban"
 HINT_UPDATES="$FIX updates"
+HINT_AUTOUPDATES="$FIX autoupdates"
 HINT_CLAMAV="$FIX clamav"
 HINT_NTP="$FIX ntp"
 HINT_SSH="$FIX ssh"
@@ -216,6 +217,42 @@ UPGRADABLE=$(apt list --upgradable 2>/dev/null | tail -n +2 | wc -l)
 [ "$UPGRADABLE" -eq 0 ] \
     && ok "Sistema al día (0 actualizaciones pendientes)" \
     || warn "$UPGRADABLE actualizaciones de paquetes pendientes" "$HINT_UPDATES"
+
+sub "Parches de seguridad automáticos"
+if ! dpkg -s unattended-upgrades >/dev/null 2>&1; then
+    warn "unattended-upgrades no está instalado — los parches de seguridad no se aplican solos" "$HINT_AUTOUPDATES"
+else
+    # apt-config devuelve el valor efectivo tras leer todo apt.conf.d, así
+    # que también detecta un fichero posterior que lo desactive.
+    AU_LISTS="" AU_UPGRADE=""
+    eval "$(apt-config shell AU_LISTS APT::Periodic::Update-Package-Lists AU_UPGRADE APT::Periodic::Unattended-Upgrade 2>/dev/null)"
+    if [ "${AU_LISTS:-0}" != "0" ] && [ "${AU_UPGRADE:-0}" != "0" ]; then
+        ok "unattended-upgrades activado en apt (Update-Package-Lists=$AU_LISTS, Unattended-Upgrade=$AU_UPGRADE)"
+    else
+        warn "unattended-upgrades instalado pero desactivado en apt (Update-Package-Lists=${AU_LISTS:-0}, Unattended-Upgrade=${AU_UPGRADE:-0})" "$HINT_AUTOUPDATES"
+    fi
+
+    # Los timers son los que lo lanzan: sin ellos la configuración no sirve.
+    TIMERS_OFF=""
+    for t in apt-daily.timer apt-daily-upgrade.timer; do
+        systemctl is-enabled --quiet "$t" 2>/dev/null && systemctl is-active --quiet "$t" 2>/dev/null \
+            || TIMERS_OFF="$TIMERS_OFF $t"
+    done
+    [ -z "$TIMERS_OFF" ] \
+        && ok "Timers apt-daily y apt-daily-upgrade activos" \
+        || warn "Timers de apt inactivos:$TIMERS_OFF — unattended-upgrades nunca se lanza" "$HINT_AUTOUPDATES"
+
+    # Prueba de que se está ejecutando de verdad, no solo configurado.
+    AU_LOG=/var/log/unattended-upgrades/unattended-upgrades.log
+    if [ ! -f "$AU_LOG" ]; then
+        warn "unattended-upgrades no se ha ejecutado nunca (no existe $AU_LOG)" "$HINT_AUTOUPDATES"
+    else
+        AU_AGE_DAYS=$(( ( $(date +%s) - $(stat -c %Y "$AU_LOG") ) / 86400 ))
+        [ "$AU_AGE_DAYS" -le 3 ] \
+            && ok "unattended-upgrades se ejecutó hace $AU_AGE_DAYS día(s)" \
+            || warn "unattended-upgrades no se ejecuta desde hace $AU_AGE_DAYS días (revisa: journalctl -u apt-daily-upgrade)" "$HINT_AUTOUPDATES"
+    fi
+fi
 
 sub "Sincronización horaria"
 NTP_SYNCED=$(timedatectl show -p NTPSynchronized --value 2>/dev/null)

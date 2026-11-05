@@ -18,8 +18,8 @@
 # publicado y acababa descartada. El efecto era que ningún contenedor
 # podía instalar dependencias ni hablar con internet —un `docker build`
 # fallaba con `npm ci` colgado y `apk add` con errores de TLS—, y solo
-# funcionaba lo que casualmente usara un puerto de la lista (el DNS por
-# el 53). Acotando cada regla a la interfaz de entrada externa, el
+# funcionaba lo que casualmente usara un puerto de la lista.
+# Acotando cada regla a la interfaz de entrada externa, el
 # allowlist se aplica a lo que llega de fuera, que es su cometido, y el
 # tráfico saliente de los contenedores —que entra por docker0 o br-*—
 # ni siquiera se evalúa.
@@ -36,10 +36,10 @@
 # siempre al final de la cadena.
 #
 # Formato en .env:
-#   DOCKER_ALLOWED_PORTS="53/tcp 53/udp 5432/tcp 6379/tcp 9000:9001/tcp"
+#   DOCKER_ALLOWED_PORTS="8080/tcp 8443/tcp 3000:3001/tcp"
 #   (puerto o rango puerto:puerto, seguido de /tcp o /udp, separados por espacios)
 #
-#   DOCKER_WAN_IFACES="enp5s0 tailscale0"   (opcional)
+#   DOCKER_WAN_IFACES="eth0 wg0"   (opcional)
 #   Interfaces por las que llega el tráfico externo al que se aplica el
 #   allowlist. Si no se define, se usa la de la ruta por defecto. Si el
 #   host publica servicios también por una VPN, hay que listarla aquí:

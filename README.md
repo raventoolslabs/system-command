@@ -89,7 +89,7 @@ puerto publicado como el que **sale** de un contenedor hacia internet. Con
 las reglas filtrando solo por `--dport`, el `DROP` final alcanzaba también
 a las conexiones nuevas que abrían los contenedores: ninguno en red bridge
 tenía salida salvo por los puertos que casualmente estuvieran en la
-allowlist (el 53, y de ahí que el DNS funcionara y nada más). El síntoma
+allowlist (por ejemplo, el DNS si el 53 estaba en ella). El síntoma
 típico era un `docker build` fallando con `npm ci` colgado durante ~80 s y
 `apk add` con errores de TLS.
 
@@ -113,7 +113,7 @@ propia allowlist de egreso, no un efecto colateral del `DROP` de entrada.
 `DOCKER_WAN_IFACES` es opcional: sin él se usa la interfaz de la ruta por
 defecto. **Lo que no aparezca en esa lista queda sin filtrar por esta
 cadena**, así que si el host publica servicios también por una VPN hay que
-incluirla — en este host, `enp5s0` y `tailscale0`.
+incluirla (por ejemplo, `DOCKER_WAN_IFACES="eth0 wg0"`).
 
 
 ### ⚠️ Configuración adicional obligatoria: instalar los `.service`
@@ -181,6 +181,7 @@ organizada en **apartados independientes**:
 | `firewall`  | Relanza `host-firewall.sh` y `docker-user-firewall.sh` — arregla el caso típico de un `nft -f /etc/nftables.conf` que vació `DOCKER-USER` |
 | `fail2ban`  | Instala/activa fail2ban |
 | `updates`   | Actualizaciones de paquetes pendientes (delega en `update_packages.sh`) |
+| `autoupdates` | Parches de seguridad automáticos: instala `unattended-upgrades`, lo activa en `/etc/apt/apt.conf.d/20auto-upgrades`, activa los timers `apt-daily`/`apt-daily-upgrade` y lo ejecuta una vez para aplicar lo pendiente. Si otro fichero de `apt.conf.d` lo desactiva a propósito, no lo pisa: lo informa como fallo |
 | `clamav`    | ClamAV: instalación, actualización de firmas (freshclam) y de versión |
 | `ntp`       | Activa NTP y lo apunta al servidor de `NTP_SERVER` (si está definido en `.env`) |
 | `ssh`       | Directivas que nunca pueden bloquear una sesión legítima: `PermitEmptyPasswords`, `MaxAuthTries`, vía `/etc/ssh/sshd_config.d/99-fix-security.conf` (validado con `sshd -t` antes de recargar) |
