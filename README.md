@@ -89,7 +89,7 @@ puerto publicado como el que **sale** de un contenedor hacia internet. Con
 las reglas filtrando solo por `--dport`, el `DROP` final alcanzaba también
 a las conexiones nuevas que abrían los contenedores: ninguno en red bridge
 tenía salida salvo por los puertos que casualmente estuvieran en la
-allowlist (el 53, y de ahí que el DNS funcionara y nada más). El síntoma
+allowlist (por ejemplo, el DNS si el 53 estaba en ella). El síntoma
 típico era un `docker build` fallando con `npm ci` colgado durante ~80 s y
 `apk add` con errores de TLS.
 
@@ -113,7 +113,7 @@ propia allowlist de egreso, no un efecto colateral del `DROP` de entrada.
 `DOCKER_WAN_IFACES` es opcional: sin él se usa la interfaz de la ruta por
 defecto. **Lo que no aparezca en esa lista queda sin filtrar por esta
 cadena**, así que si el host publica servicios también por una VPN hay que
-incluirla — en este host, `enp5s0` y `tailscale0`.
+incluirla (por ejemplo, `DOCKER_WAN_IFACES="eth0 wg0"`).
 
 
 ### ⚠️ Configuración adicional obligatoria: instalar los `.service`

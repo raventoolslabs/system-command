@@ -6,7 +6,7 @@
 # Por qué "upgrade" y no "dist-upgrade"/"full-upgrade": upgrade nunca
 # elimina paquetes instalados para resolver dependencias, solo actualiza
 # los que ya tienes. Es el modo seguro por defecto en un host con
-# servicios corriendo (Docker, postgres, redis, minio...).
+# servicios corriendo (Docker, bases de datos, almacenamiento...).
 #
 # Paquetes retenidos ("se han retenido"): apt-get upgrade también se
 # niega a INSTALAR paquetes nuevos, y algunas actualizaciones lo exigen

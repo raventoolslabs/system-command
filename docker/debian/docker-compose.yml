@@ -43,8 +43,8 @@ services:
       # Monta un resolv.conf fijo (DNS público) en vez de dejar que Docker
       # genere el suyo (que apunta a 127.0.0.11, su proxy DNS interno). Dos
       # motivos, ninguno arreglable desde este compose:
-      #  1) el host resuelve vía el MagicDNS de Tailscale (100.100.100.100),
-      #     solo alcanzable por su propia interfaz tailscale0 — un
+      #  1) si el host resuelve vía el DNS de una VPN, ese servidor
+      #     solo es alcanzable por la interfaz de la VPN — un
       #     contenedor en su netns no tiene esa ruta.
       #  2) en este host el proxy 127.0.0.11 de Docker no responde en
       #     absoluto (confirmado con un contenedor busybox nuevo en la red

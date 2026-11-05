@@ -22,7 +22,7 @@ if [ -f "$ENV_FILE" ]; then
     NTP_SERVER=$(grep -E '^NTP_SERVER=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
     DOCKER_WAN_IFACES=$(grep -E '^DOCKER_WAN_IFACES=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
 fi
-EXPECTED_PORTS="${EXPECTED_PORTS:-22 80 443 41641}"
+EXPECTED_PORTS="${EXPECTED_PORTS:-22 80 443}"
 DOCKER_ALLOWED_PORTS="${DOCKER_ALLOWED_PORTS:-}"
 # Interfaces sobre las que docker-user-firewall.sh aplica el allowlist. Si no
 # se declaran, usa la de la ruta por defecto; aqui se replica esa misma regla
@@ -36,7 +36,7 @@ NTP_SERVER="${NTP_SERVER:-}"
 # accesibles. Para no duplicar esa misma lista en EXPECTED_PORTS, el
 # universo de puertos esperados aquí es la unión de las tres variables:
 # EXPECTED_PORTS solo necesita los puertos que NO gestione ya ninguno de
-# los dos scripts de firewall (p.ej. 22 y 41641, fuera de su control).
+# los dos scripts de firewall (p.ej. 22, fuera de su control).
 expand_ports() {
     # $1 = entradas "puerto[:puerto]/tcp|udp" separadas por espacios;
     # imprime un puerto suelto por línea, expandiendo los rangos.
