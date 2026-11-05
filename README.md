@@ -79,36 +79,42 @@ cadena que Docker garantiza no tocar) en una allowlist explícita, con un
 sudo ./scripts/firewall/docker-user-firewall.sh
 ```
 
-Lee `DOCKER_ALLOWED_PORTS` del `.env`.
+Lee `DOCKER_ALLOWED_PORTS` y `DOCKER_WAN_IFACES` del `.env`.
 
-### ⚠️ Limitación conocida: el `DROP` final también bloquea la salida a internet de los contenedores
+### El `DROP` final se aplica solo al tráfico entrante
 
-`DOCKER-USER` no distingue dirección: Docker la invoca para **todo** el
-tráfico que pasa por `FORWARD`, tanto el que entra hacia un puerto
-publicado como el que **sale** de un contenedor hacia internet (por
-ejemplo, un `apt-get install` dentro de un contenedor). El `DROP`
-incondicional que este script deja al final de la cadena solo tenía en
-mente el caso de entrada (proteger puertos publicados no autorizados), pero
-como efecto secundario también bloquea cualquier conexión *nueva* que un
-contenedor intente abrir hacia fuera si su puerto de destino no está en
-`DOCKER_ALLOWED_PORTS` — confirmado en producción: con este `DROP` activo,
-ningún contenedor del host (en red bridge) tiene salida a internet salvo
-los que corran con `network: host`.
+`DOCKER-USER` no distingue dirección por sí sola: Docker la invoca para
+**todo** el tráfico que pasa por `FORWARD`, tanto el que entra hacia un
+puerto publicado como el que **sale** de un contenedor hacia internet. Con
+las reglas filtrando solo por `--dport`, el `DROP` final alcanzaba también
+a las conexiones nuevas que abrían los contenedores: ninguno en red bridge
+tenía salida salvo por los puertos que casualmente estuvieran en la
+allowlist (el 53, y de ahí que el DNS funcionara y nada más). El síntoma
+típico era un `docker build` fallando con `npm ci` colgado durante ~80 s y
+`apk add` con errores de TLS.
 
-Si se quiere permitir la salida de los contenedores sin abrir entrada no
-deseada, la solución típica es añadir, **antes** del `DROP` final, una
-regla que acepte conexiones nuevas cuyo origen sea una subred de
-contenedor Docker y cuyo destino NO sea otra subred de contenedor:
+Resuelto acotando cada regla a la **interfaz de entrada**: las reglas
+`ACCEPT` de puerto y el `DROP` final llevan `-i` sobre las interfaces
+declaradas en `DOCKER_WAN_IFACES`. El tráfico que sale de un contenedor
+entra por `docker0` o `br-*`, no por ellas, así que atraviesa la cadena sin
+veredicto y sigue su curso. Lo que llega de fuera se filtra igual que antes.
 
-```bash
-iptables -A DOCKER-USER -m conntrack --ctstate NEW \
-    -s 172.16.0.0/12 ! -d 172.16.0.0/12 -j ACCEPT
-```
+Se eligió esto en lugar de la alternativa que se apuntaba antes —aceptar
+`--ctstate NEW` con origen `172.16.0.0/12`— porque esa subred es la de las
+redes por defecto de Docker y no cubre las definidas a mano con otro rango,
+y porque mezcla en la misma cadena dos políticas distintas: lo que puede
+entrar y lo que puede salir.
 
-Esto no está aplicado todavía en `docker-user-firewall.sh` — es una
-decisión de postura de seguridad (¿deben los contenedores tener salida
-libre a internet por defecto?) que requiere decidirse caso por caso, no
-algo que este script deba asumir por su cuenta.
+**Postura que implica:** los contenedores tienen salida libre a internet,
+que es el comportamiento por defecto de Docker y lo que la mayoría de
+imágenes espera. Restringir la salida es una decisión aparte y pide su
+propia allowlist de egreso, no un efecto colateral del `DROP` de entrada.
+
+`DOCKER_WAN_IFACES` es opcional: sin él se usa la interfaz de la ruta por
+defecto. **Lo que no aparezca en esa lista queda sin filtrar por esta
+cadena**, así que si el host publica servicios también por una VPN hay que
+incluirla — en este host, `enp5s0` y `tailscale0`.
+
 
 ### ⚠️ Configuración adicional obligatoria: instalar los `.service`
 

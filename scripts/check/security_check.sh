@@ -20,9 +20,14 @@ if [ -f "$ENV_FILE" ]; then
     DOCKER_ALLOWED_PORTS=$(grep -E '^DOCKER_ALLOWED_PORTS=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
     HOST_ALLOWED_PORTS=$(grep -E '^HOST_ALLOWED_PORTS=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
     NTP_SERVER=$(grep -E '^NTP_SERVER=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+    DOCKER_WAN_IFACES=$(grep -E '^DOCKER_WAN_IFACES=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
 fi
 EXPECTED_PORTS="${EXPECTED_PORTS:-22 80 443 41641}"
 DOCKER_ALLOWED_PORTS="${DOCKER_ALLOWED_PORTS:-}"
+# Interfaces sobre las que docker-user-firewall.sh aplica el allowlist. Si no
+# se declaran, usa la de la ruta por defecto; aqui se replica esa misma regla
+# para auditar exactamente lo que hay puesto.
+DOCKER_WAN_IFACES="${DOCKER_WAN_IFACES:-$(ip route show default 2>/dev/null | awk '{print $5; exit}')}"
 HOST_ALLOWED_PORTS="${HOST_ALLOWED_PORTS:-}"
 NTP_SERVER="${NTP_SERVER:-}"
 
@@ -174,8 +179,22 @@ if command -v docker >/dev/null 2>&1 && systemctl is-active --quiet docker 2>/de
         for entry in $PUBLISHED; do
             port="${entry%/*}"
             proto="${entry##*/}"
-            iptables -C DOCKER-USER -p "$proto" --dport "$port" -j ACCEPT 2>/dev/null \
-                || UNPROTECTED="$UNPROTECTED $entry"
+            FOUND=""
+            for iface in $DOCKER_WAN_IFACES; do
+                if iptables -C DOCKER-USER -i "$iface" -p "$proto" --dport "$port" -j ACCEPT 2>/dev/null; then
+                    FOUND=1
+                    break
+                fi
+            done
+
+            # Se acepta tambien la forma antigua, sin interfaz, para que la
+            # auditoria siga siendo util en un host al que todavia no se le ha
+            # reaplicado el firewall.
+            if [ -z "$FOUND" ] && iptables -C DOCKER-USER -p "$proto" --dport "$port" -j ACCEPT 2>/dev/null; then
+                FOUND=1
+            fi
+
+            [ -n "$FOUND" ] || UNPROTECTED="$UNPROTECTED $entry"
         done
 
         if [ -z "$PUBLISHED" ]; then
